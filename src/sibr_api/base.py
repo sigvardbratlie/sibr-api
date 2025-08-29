@@ -45,7 +45,7 @@ class ApiBase(metaclass=abc.ABCMeta):
         self.logger = logger
         self.api_key = None
         self.session = None
-        self.use_proxy = True
+        self.use_proxy = False
         self.proxies = proxies
         self.base_url = None
         self.ok_responses = 0
@@ -137,7 +137,8 @@ class ApiBase(metaclass=abc.ABCMeta):
         '''
         await self._ensure_session()
         try:
-            async with self.session.get(url, params=headers, proxy=proxy_url) as response:
+            async with self.session.get(url, headers=headers, proxy=proxy_url) as response:
+                #print(f"CODE: {response.status}\nRESPONSE: {response.json}\nURL: {url}\nHEADERS: {headers}")
                 if response.status == 429:
                     error_message = await response.text()
                     raise RateLimitError(
@@ -156,20 +157,8 @@ class ApiBase(metaclass=abc.ABCMeta):
                     self.logger.error(
                         f'Error message - {inspect.currentframe().f_code.co_name}: {response.status}, {error_text}.')
                     return None
-        except RateLimitError:
-            raise
-        except APIkeyError:
-            raise
-        except aiohttp.ClientError as e:
-            self.logger.error(f"network failure - {e}. url {url}")
-            return None
-        except asyncio.TimeoutError:
-            self.logger.error(f"Timeout error.")
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"Unexpected error in fetch_single - {e}")
-            print(f'Reponse: {response}, response type : {type(response)}, url {url} ')
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            self.logger.error(f"Network failure or timeout - {e}. url {url}")
             return None
 
     @abc.abstractmethod
