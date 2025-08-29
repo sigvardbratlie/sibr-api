@@ -32,15 +32,15 @@ To use this module, you must create a new class that inherits from `ApiBase` and
 ### Step 1: Create a Subclass
 First, define a class that inherits from `ApiBase`. In the `__init__` method, you should call the parent constructor and set the `base_url` for the API you are targeting.
 
-
 ```python
-from sibr_api import ApiBase
+from sibr_api.base import ApiBase
 import pandas as pd
 
+
 class MyApiClient(ApiBase):
-    def __init__(self):
-        super().__init__(logger_name='MyApiClient')
-        self.base_url = "[https://api.example.com/v1](https://api.example.com/v1)"
+   def __init__(self):
+      super().__init__(logger_name='MyApiClient')
+      self.base_url = "[https://api.example.com/v1](https://api.example.com/v1)"
 ```
 
 ### Step 2: Implement the Abstract Methods
