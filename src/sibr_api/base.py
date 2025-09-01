@@ -127,7 +127,8 @@ class ApiBase(metaclass=abc.ABCMeta):
                            timeout : int = 30,
                            allow_redirects: bool = True,
                            ssl: bool = True,
-                           return_json: bool = True,
+                           return_format: Literal["json","txt"] = "json",
+                           response_handler = None
                            ):
         '''
         Async method to fetch a given url.
@@ -174,11 +175,19 @@ class ApiBase(metaclass=abc.ABCMeta):
                     error_message = await response.text()
                     raise PermissionError(f'Permission denied. Error: {error_message}')
                 if response.status == 200:
-                    if return_json:
-                        response = await response.json()
-                        return response
+                    if return_format:
+                        if return_format == 'json':
+                            response = await response.json()
+                            return response
+                        elif return_format == 'txt':
+                            response = await response.text()
+                            return response
+                        else:
+                            raise TypeError(f'return_format must be either json or txt but got {return_format}')
+                    elif response_handler:
+                        return await response_handler(response)
                     else:
-                        return response
+                        raise TypeError(f'Either return_format or response_handler must be present.')
                 else:
                     error_text = await response.text()
                     self.logger.error(
