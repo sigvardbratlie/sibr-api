@@ -119,7 +119,15 @@ class ApiBase(metaclass=abc.ABCMeta):
         self.session = None
         return await self._ensure_session()
 
-    async def fetch_single(self, url : str,headers : dict = None,proxy_url : str = None) -> dict:
+    async def fetch_single(self, url : str,
+                           headers : dict = None,
+                           params : dict = None,
+                           auth = None,
+                           proxy_url : str = None,
+                           timeout : int = 30,
+                           allow_redirects: bool = True,
+                           ssl: bool = True
+                           ) -> dict:
         '''
         Async method to fetch a given url.
 
@@ -127,6 +135,12 @@ class ApiBase(metaclass=abc.ABCMeta):
             url (str): The url to fetch
             headers (dict): Header. Example {'User-Agent': 'YourApp/1.0'}
             proxy_url (str): The proxy url to use
+            params (dict): Dictionary of query parameters to add to the URL.
+            auth (aiohttp.BasicAuth): Basic authentication credentials.
+            timeout (int): The maximum number of seconds for the request to complete.
+            allow_redirects (bool): If set to False, don't follow redirects.
+            ssl (bool): Perform SSL verification. Set to False to ignore SSL certificate validation errors.
+
 
         Returns:
             dict: The JSON response from the API call.
@@ -137,18 +151,26 @@ class ApiBase(metaclass=abc.ABCMeta):
         '''
         await self._ensure_session()
         try:
-            async with self.session.get(url, headers=headers, proxy=proxy_url) as response:
+            async with self.session.get(url,
+                                        headers=headers,
+                                        params = params,
+                                        auth = auth,
+                                        proxy=proxy_url,
+                                        timeout = timeout,
+                                        allow_redirects = allow_redirects,
+                                        ssl = ssl) as response:
                 #print(f"CODE: {response.status}\nRESPONSE: {response.json}\nURL: {url}\nHEADERS: {headers}")
                 if response.status == 429:
                     error_message = await response.text()
                     raise RateLimitError(
                         f'Rate limit exceeded. Error: {error_message}')
-                if response.status == 403:
-                    error_message = await response.text()
-                    raise PermissionError(f'Permission denied. Error: {error_message}')
                 if response.status == 401:
                     error_message = await response.text()
                     raise APIkeyError(f'Authorization error. Error: {error_message}')
+
+                if response.status == 403:
+                    error_message = await response.text()
+                    raise PermissionError(f'Permission denied. Error: {error_message}')
                 if response.status == 200:
                     response = await response.json()
                     return response
