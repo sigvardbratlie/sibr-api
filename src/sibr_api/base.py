@@ -299,7 +299,8 @@ class ApiBase(metaclass=abc.ABCMeta):
                     self.logger.info(f'Processed {count} so far. Save interval of {save_interval} reached.')
                     if save:
                         self.logger.info(f'Saving {len(results_to_save)} results')
-                        self.save_func(results_to_save)
+                        data_to_save = self.transform_data(results_to_save)
+                        self.save_func(data_to_save)
                     all_results.extend(results_to_save)
                     results_to_save.clear()
 
@@ -308,7 +309,8 @@ class ApiBase(metaclass=abc.ABCMeta):
         finally:
             if results_to_save:
                 if save:
-                    self.save_func(results_to_save)
+                    data_to_save = self.transform_data(results_to_save)
+                    self.save_func(data_to_save)
                 all_results.extend(results_to_save)
                 results_to_save.clear()
         self.logger.info(f'Geocoding job finished. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
