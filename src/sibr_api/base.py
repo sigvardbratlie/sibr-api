@@ -199,31 +199,41 @@ class ApiBase(metaclass=abc.ABCMeta):
             return None
 
     @abc.abstractmethod
-    def transform_output(self,output):
+    def transform_single(self,item):
         """
-        Abstract method to transform the raw API response into a desired format.
+        Abstract method to transform a single raw API response into a desired format.
 
         This method should be implemented by subclasses to parse and
-        restructure the data received from an API call.
+        restructure the data received from a single API call.
+
+        Args:
+            item: The raw response from a single API call. The type and structure
+                   will depend on the specific API.
+        Returns:
+            Any: The transformed data in the desired format.
 
         """
         pass
 
-    # @abc.abstractmethod
-    # def get_item(self, item):
-    #     """
-    #     Abstract method to fetch a single item from the API.
-    #
-    #     This method should be implemented by subclasses to define how a
-    #     single request is made to the specific API.
-    #
-    #     NB: This function must be an async method and use the `fetch_single` class method to get the desired url.
-    #
-    #     Args:
-    #         item: The input parameter(s) required to fetch a single item.
-    #               The type and content of 'item' will depend on the specific API.
-    #     """
-    #     pass
+    @abc.abstractmethod
+    def transform_data(self, items):
+        """
+        Abstract method to transform a list of raw API responses into a desired format.
+
+        This method should be implemented by subclasses to parse and
+        restructure a list of data received from API calls.
+
+        This method should implement the transform_single method.
+
+        Args:
+            items (list): A list of raw responses from API calls.
+        Returns:
+            Any: The transformed data, typically a pandas DataFrame or a list of transformed items.
+
+        """
+
+        pass
+
 
     @abc.abstractmethod
     def save_func(self,results : list):
@@ -369,7 +379,8 @@ class ApiBase(metaclass=abc.ABCMeta):
         tasks = [fetch_item_with_id(item_id=item_id, item=item) for item_id,item in inputs.items()]
 
         all_results = await self._process_tasks(tasks, save, save_interval)
-        return all_results
+        output = self.transform_data(all_results)
+        return output
 
     async def get_items(self,
                                inputs : list | dict,
@@ -421,4 +432,5 @@ class ApiBase(metaclass=abc.ABCMeta):
         tasks = [fetch_item(item=item) for item_id,item in inputs]
 
         all_results = await self._process_tasks(tasks, save, save_interval)
-        return all_results
+        output = self.transform_data(all_results)
+        return output
