@@ -126,8 +126,9 @@ class ApiBase(metaclass=abc.ABCMeta):
                            proxy_url : str = None,
                            timeout : int = 30,
                            allow_redirects: bool = True,
-                           ssl: bool = True
-                           ) -> dict:
+                           ssl: bool = True,
+                           return_json: bool = True,
+                           ):
         '''
         Async method to fetch a given url.
 
@@ -140,10 +141,11 @@ class ApiBase(metaclass=abc.ABCMeta):
             timeout (int): The maximum number of seconds for the request to complete.
             allow_redirects (bool): If set to False, don't follow redirects.
             ssl (bool): Perform SSL verification. Set to False to ignore SSL certificate validation errors.
+            return_json (bool): If set to True, return a JSON response.
 
 
         Returns:
-            dict: The JSON response from the API call.
+
 
         Raises:
             RateLimitError: If the rate limit is exceeded.
@@ -172,8 +174,11 @@ class ApiBase(metaclass=abc.ABCMeta):
                     error_message = await response.text()
                     raise PermissionError(f'Permission denied. Error: {error_message}')
                 if response.status == 200:
-                    response = await response.json()
-                    return response
+                    if return_json:
+                        response = await response.json()
+                        return response
+                    else:
+                        return response
                 else:
                     error_text = await response.text()
                     self.logger.error(
