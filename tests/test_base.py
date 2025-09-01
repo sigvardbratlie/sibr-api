@@ -126,7 +126,9 @@ async def test_get_items_with_ids(client, aresponses):
     aresponses.add("mockapi.com", "/items/3", "GET", aresponses.Response(status=500))  # Ett kall feiler
 
     inputs = {"item1": "1", "item2": "2", "item3": "3"}
-    results = await client.get_items_with_ids(inputs, concurrent_requests=2)
+    results = await client.get_items_with_ids(inputs = inputs,
+                                              fetcher = client.get_item,
+                                                concurrent_requests=2)
 
     results_dict = dict(results)
     assert results_dict["item1"] == {"id": 1}
@@ -146,7 +148,8 @@ async def test_get_items(client, aresponses):
     # Hvis den skal ta en ren liste, må du justere `tasks`-listen i get_items-metoden.
     # Gitt din nåværende kode, sender vi en liste med tupler:
     tasks = [(item, item) for item in inputs]
-    results = await client.get_items(tasks)
+    results = await client.get_items(inputs = tasks,
+                                     fetcher = client.get_item)
 
     assert len(results) == 2
     assert {"id": "a"} in results
@@ -163,7 +166,10 @@ async def test_save_func_integration(client, aresponses):
     inputs = [str(i) for i in range(1, 7)]
 
     # Lagre hvert 3. resultat
-    await client.get_items_with_ids(inputs, save=True, save_interval=3)
+    await client.get_items_with_ids(inputs = inputs,
+                                    fetcher = client.get_item,
+                                    save=True,
+                                    save_interval=3)
 
     assert len(client.saved_results) == 6
     await client.close()

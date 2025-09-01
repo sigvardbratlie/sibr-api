@@ -127,7 +127,7 @@ class ApiBase(metaclass=abc.ABCMeta):
                            timeout : int = 30,
                            allow_redirects: bool = True,
                            ssl: bool = True,
-                           return_format: Literal["json","txt"] = "json",
+                           return_format: Literal["json", "txt"] = "json",
                            response_handler = None
                            ):
         '''
@@ -142,9 +142,10 @@ class ApiBase(metaclass=abc.ABCMeta):
             timeout (int): The maximum number of seconds for the request to complete.
             allow_redirects (bool): If set to False, don't follow redirects.
             ssl (bool): Perform SSL verification. Set to False to ignore SSL certificate validation errors.
-            return_json (bool): If set to True, return a JSON response.
-
-
+            return_format (Literal["json","txt"]): The format to return the response in. Can be "json" or "txt".
+                                                   Defaults to "json".
+            response_handler (callable): An optional async function to handle the aiohttp.ClientResponse object directly.
+                                         If provided, `return_format` is ignored.
         Returns:
 
 
@@ -175,7 +176,9 @@ class ApiBase(metaclass=abc.ABCMeta):
                     error_message = await response.text()
                     raise PermissionError(f'Permission denied. Error: {error_message}')
                 if response.status == 200:
-                    if return_format:
+                    if response_handler:
+                        return await response_handler(response)
+                    elif return_format:
                         if return_format == 'json':
                             response = await response.json()
                             return response
@@ -184,8 +187,6 @@ class ApiBase(metaclass=abc.ABCMeta):
                             return response
                         else:
                             raise TypeError(f'return_format must be either json or txt but got {return_format}')
-                    elif response_handler:
-                        return await response_handler(response)
                     else:
                         raise TypeError(f'Either return_format or response_handler must be present.')
                 else:
@@ -208,21 +209,21 @@ class ApiBase(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
-    def get_item(self, item):
-        """
-        Abstract method to fetch a single item from the API.
-
-        This method should be implemented by subclasses to define how a
-        single request is made to the specific API.
-
-        NB: This function must be an async method and use the `fetch_single` class method to get the desired url.
-
-        Args:
-            item: The input parameter(s) required to fetch a single item.
-                  The type and content of 'item' will depend on the specific API.
-        """
-        pass
+    # @abc.abstractmethod
+    # def get_item(self, item):
+    #     """
+    #     Abstract method to fetch a single item from the API.
+    #
+    #     This method should be implemented by subclasses to define how a
+    #     single request is made to the specific API.
+    #
+    #     NB: This function must be an async method and use the `fetch_single` class method to get the desired url.
+    #
+    #     Args:
+    #         item: The input parameter(s) required to fetch a single item.
+    #               The type and content of 'item' will depend on the specific API.
+    #     """
+    #     pass
 
     @abc.abstractmethod
     def save_func(self,results : list):
@@ -305,6 +306,7 @@ class ApiBase(metaclass=abc.ABCMeta):
 
     async def get_items_with_ids(self,
                                inputs : list | dict,
+                               fetcher,
                                save: bool = False,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
@@ -319,6 +321,7 @@ class ApiBase(metaclass=abc.ABCMeta):
         Args:
             inputs (list | dict): A list of items or a dictionary where keys are item IDs
                                    and values are the items to be fetched.
+            fetcher (callable): An asynchronous function that takes a single item as input and fetches its data.
             save (bool): If True, results will be saved periodically using `_save_func`.
             save_interval (int): The number of results to accumulate before saving (if `save` is True).
             concurrent_requests (int): The maximum number of concurrent API requests.
@@ -354,7 +357,7 @@ class ApiBase(metaclass=abc.ABCMeta):
             """
             async with semaphore:
                 try:
-                    result  = await self.get_item(item)
+                    result  = await fetcher(item)
                     return (item_id, result)
                 except RateLimitError:
                     self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
@@ -370,6 +373,7 @@ class ApiBase(metaclass=abc.ABCMeta):
 
     async def get_items(self,
                                inputs : list | dict,
+                               fetcher,
                                save: bool = False,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
@@ -378,10 +382,11 @@ class ApiBase(metaclass=abc.ABCMeta):
         Fetches multiple items concurrently.
 
         This function is designed to handle a list of inputs. It uses asyncio.Semaphore
-        to limit the number of concurrent requests to prevent overwhelming the API.
+        to limit the number of concurrent requests to prevent overwhelming the API and to ensure fair usage.
 
         Args:
             inputs (list): A list of items to be fetched.
+            fetcher (callable): An asynchronous function that takes a single item as input and fetches its data.
             save (bool): If True, results will be saved periodically using `_save_func`.
             save_interval (int): The number of results to accumulate before saving (if `save` is True).
             concurrent_requests (int): The maximum number of concurrent API requests.
@@ -404,7 +409,7 @@ class ApiBase(metaclass=abc.ABCMeta):
         async def fetch_item(item):
             async with semaphore:
                 try:
-                    result  = await self.get_item(item)
+                    result  = await fetcher(item)
                     return result
                 except RateLimitError:
                     self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
