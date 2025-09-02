@@ -1,1 +1,1 @@
-from .base import ApiBase,RateLimitError,APIkeyError
+from .base import ApiBase,RateLimitError,APIkeyError,NotFoundError
