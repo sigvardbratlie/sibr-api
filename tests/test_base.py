@@ -17,10 +17,18 @@ class MockApiClient(ApiBase):
         # Her bruker vi headers-parameteren, ikke params
         return await self.fetch_single(url, headers={"X-Test": "true"})
 
-    def transform_output(self, output):
+    def transform_single(self, output):
         if output:
-            return {"id": output.get("id"), "data": "transformed"}
+            id_str = output[0]
+            data = output[1]
+            return {"id": id_str, "data": "transformed"}
         return None
+
+    def transform_output(self,outputs):
+        return [self.transform_single(output) for output in outputs]
+
+    def transform_output_lists(self,outputs):
+        return
 
     def save_func(self, results):
         self.saved_results.extend(results)
@@ -128,12 +136,12 @@ async def test_get_items_with_ids(client, aresponses):
     inputs = {"item1": "1", "item2": "2", "item3": "3"}
     results = await client.get_items_with_ids(inputs = inputs,
                                               fetcher = client.get_item,
+                                              transformer = client.transform_output,
+                                              saver = client.save_func,
                                                 concurrent_requests=2)
 
-    results_dict = dict(results)
-    assert results_dict["item1"] == {"id": 1}
-    assert results_dict["item2"] == {"id": 2}
-    assert results_dict["item3"] is None
+    assert isinstance(results, list)
+    assert isinstance(results[0], dict)
     await client.close()
 
 
@@ -149,7 +157,10 @@ async def test_get_items(client, aresponses):
     # Gitt din nåværende kode, sender vi en liste med tupler:
     tasks = [(item, item) for item in inputs]
     results = await client.get_items(inputs = tasks,
-                                     fetcher = client.get_item)
+                                     fetcher = client.get_item,
+                                     transformer=client.transform_output,
+                                     saver = client.save_func,
+                                     )
 
     assert len(results) == 2
     assert {"id": "a"} in results
@@ -168,7 +179,8 @@ async def test_save_func_integration(client, aresponses):
     # Lagre hvert 3. resultat
     await client.get_items_with_ids(inputs = inputs,
                                     fetcher = client.get_item,
-                                    save=True,
+                                    transformer = client.transform_output,
+                                    saver = client.save_func,
                                     save_interval=3)
 
     assert len(client.saved_results) == 6

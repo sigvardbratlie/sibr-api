@@ -6,9 +6,10 @@ import asyncio
 import inspect
 import pandas as pd
 from urllib.parse import quote_plus
-from typing import Literal
+from typing import Literal,List,Tuple
 import json
 import abc
+from typing import Callable
 from dotenv import load_dotenv
 #os.chdir("..")
 load_dotenv()
@@ -128,7 +129,7 @@ class ApiBase(metaclass=abc.ABCMeta):
                            allow_redirects: bool = True,
                            ssl: bool = True,
                            return_format: Literal["json", "txt"] = "json",
-                           response_handler = None
+                           response_handler : Callable = None
                            ):
         '''
         Async method to fetch a given url.
@@ -198,41 +199,41 @@ class ApiBase(metaclass=abc.ABCMeta):
             self.logger.error(f"Network failure or timeout - {e}. url {url}")
             return None
 
-    @abc.abstractmethod
-    def transform_single(self,item):
-        """
-        Abstract method to transform a single raw API response into a desired format.
-
-        This method should be implemented by subclasses to parse and
-        restructure the data received from a single API call.
-
-        Args:
-            item: The raw response from a single API call. The type and structure
-                   will depend on the specific API.
-        Returns:
-            Any: The transformed data in the desired format.
-
-        """
-        pass
-
-    @abc.abstractmethod
-    def transform_data(self, items):
-        """
-        Abstract method to transform a list of raw API responses into a desired format.
-
-        This method should be implemented by subclasses to parse and
-        restructure a list of data received from API calls.
-
-        This method should implement the transform_single method.
-
-        Args:
-            items (list): A list of raw responses from API calls.
-        Returns:
-            Any: The transformed data, typically a pandas DataFrame or a list of transformed items.
-
-        """
-
-        pass
+    # @abc.abstractmethod
+    # def transform_single(self,item):
+    #     """
+    #     Abstract method to transform a single raw API response into a desired format.
+    #
+    #     This method should be implemented by subclasses to parse and
+    #     restructure the data received from a single API call.
+    #
+    #     Args:
+    #         item: The raw response from a single API call. The type and structure
+    #                will depend on the specific API.
+    #     Returns:
+    #         Any: The transformed data in the desired format.
+    #
+    #     """
+    #     pass
+    #
+    # @abc.abstractmethod
+    # def transform_data(self, items):
+    #     """
+    #     Abstract method to transform a list of raw API responses into a desired format.
+    #
+    #     This method should be implemented by subclasses to parse and
+    #     restructure a list of data received from API calls.
+    #
+    #     This method should implement the transform_single method.
+    #
+    #     Args:
+    #         items (list): A list of raw responses from API calls.
+    #     Returns:
+    #         Any: The transformed data, typically a pandas DataFrame or a list of transformed items.
+    #
+    #     """
+    #
+    #     pass
 
 
     @abc.abstractmethod
@@ -266,7 +267,7 @@ class ApiBase(metaclass=abc.ABCMeta):
                 break
             yield result
 
-    async def _process_tasks(self,tasks : list, save : bool, save_interval : int) -> list:
+    async def _process_tasks(self,tasks : list, transformer : Callable, saver : Callable, save_interval : int) -> list:
         """
         A function to process a list of tasks.
 
@@ -297,10 +298,10 @@ class ApiBase(metaclass=abc.ABCMeta):
 
                 if len(results_to_save) >= save_interval:
                     self.logger.info(f'Processed {count} so far. Save interval of {save_interval} reached.')
-                    if save:
+                    if saver:
                         self.logger.info(f'Saving {len(results_to_save)} results')
-                        data_to_save = self.transform_data(results_to_save)
-                        self.save_func(data_to_save)
+                        data_to_save = transformer(results_to_save)
+                        saver(data_to_save)
                     all_results.extend(results_to_save)
                     results_to_save.clear()
 
@@ -308,9 +309,9 @@ class ApiBase(metaclass=abc.ABCMeta):
             self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
         finally:
             if results_to_save:
-                if save:
-                    data_to_save = self.transform_data(results_to_save)
-                    self.save_func(data_to_save)
+                if saver:
+                    data_to_save = transformer(results_to_save)
+                    saver(data_to_save)
                 all_results.extend(results_to_save)
                 results_to_save.clear()
         self.logger.info(f'Geocoding job finished. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
@@ -318,8 +319,9 @@ class ApiBase(metaclass=abc.ABCMeta):
 
     async def get_items_with_ids(self,
                                inputs : list | dict,
-                               fetcher,
-                               save: bool = False,
+                               fetcher : Callable,
+                               transformer : Callable,
+                               saver : Callable,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
                                ) -> list:
@@ -334,7 +336,8 @@ class ApiBase(metaclass=abc.ABCMeta):
             inputs (list | dict): A list of items or a dictionary where keys are item IDs
                                    and values are the items to be fetched.
             fetcher (callable): An asynchronous function that takes a single item as input and fetches its data.
-            save (bool): If True, results will be saved periodically using `_save_func`.
+            transformer (callable): A function to transform the results.
+            saver (callable): A function to save the results.
             save_interval (int): The number of results to accumulate before saving (if `save` is True).
             concurrent_requests (int): The maximum number of concurrent API requests.
 
@@ -380,14 +383,15 @@ class ApiBase(metaclass=abc.ABCMeta):
 
         tasks = [fetch_item_with_id(item_id=item_id, item=item) for item_id,item in inputs.items()]
 
-        all_results = await self._process_tasks(tasks, save, save_interval)
-        output = self.transform_data(all_results)
+        all_results = await self._process_tasks(tasks = tasks, transformer = transformer, saver = saver, save_interval=save_interval)
+        output = transformer(all_results)
         return output
 
     async def get_items(self,
                                inputs : list | dict,
-                               fetcher,
-                               save: bool = False,
+                               fetcher : Callable,
+                               transformer : Callable,
+                               saver : Callable,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
                                ) -> list:
@@ -400,7 +404,8 @@ class ApiBase(metaclass=abc.ABCMeta):
         Args:
             inputs (list): A list of items to be fetched.
             fetcher (callable): An asynchronous function that takes a single item as input and fetches its data.
-            save (bool): If True, results will be saved periodically using `_save_func`.
+            transformer (callable): A function to transform the results.
+            saver (callable): A function to save the results.
             save_interval (int): The number of results to accumulate before saving (if `save` is True).
             concurrent_requests (int): The maximum number of concurrent API requests.
 
@@ -433,6 +438,6 @@ class ApiBase(metaclass=abc.ABCMeta):
 
         tasks = [fetch_item(item=item) for item_id,item in inputs]
 
-        all_results = await self._process_tasks(tasks, save, save_interval)
-        output = self.transform_data(all_results)
+        all_results = await self._process_tasks(tasks=tasks, transformer=transformer, saver=saver,save_interval=save_interval)
+        output = transformer(all_results)
         return output
