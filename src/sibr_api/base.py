@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from http.client import responses
 import aiohttp
 import asyncio
@@ -130,7 +131,7 @@ class ApiBase:
                            params : dict = None,
                            auth = None,
                            proxy_url : str = None,
-                           timeout : int = 30,
+                           timeout : int = 60,
                            allow_redirects: bool = True,
                            ssl: bool = True,
                            return_format: Literal["json", "txt"] = "json",
@@ -201,10 +202,11 @@ class ApiBase:
                     error_text = await response.text()
                     self.logger.error(
                         f'Error message - {inspect.currentframe().f_code.co_name}: {response.status}, {error_text}.')
-                    return None
+                    response.raise_for_status()
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            self.logger.error(f"Network failure or timeout - {e}. url {url}")
-            return None
+            self.logger.error(f"Network failure or timeout - {e}. url {url}. Doing a short timeout of 2 seconds")
+            await asyncio.sleep(2)
+            raise asyncio.TimeoutError()
 
     # @abc.abstractmethod
     # def transform_single(self,item):
@@ -277,6 +279,8 @@ class ApiBase:
                 break
             elif isinstance(result,PermissionError):
                 break
+            elif isinstance(result,asyncio.TimeoutError):
+                continue
             yield result
 
     async def _process_tasks(self,tasks : list,
