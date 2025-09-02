@@ -27,6 +27,11 @@ class APIkeyError(Exception):
     def __init__(self, message="API key is invalid or missing."):
         self.message = message
         super().__init__(self.message)
+class NotFoundError(Exception):
+    def __init__(self, message="404 Not found error"):
+        self.message = message
+        super().__init__(self.message)
+
 
 class ApiBase:
     """
@@ -167,15 +172,17 @@ class ApiBase:
                 #print(f"CODE: {response.status}\nRESPONSE: {response.json}\nURL: {url}\nHEADERS: {headers}")
                 if response.status == 429:
                     error_message = await response.text()
-                    raise RateLimitError(
-                        f'Rate limit exceeded. Error: {error_message}')
+                    raise RateLimitError(f'Rate limit exceeded. Error: {error_message}')
                 if response.status == 401:
                     error_message = await response.text()
                     raise APIkeyError(f'Authorization error. Error: {error_message}')
-
                 if response.status == 403:
                     error_message = await response.text()
                     raise PermissionError(f'Permission denied. Error: {error_message}')
+                if response.status == 404:
+                    error_message = await response.text()
+                    #self.logger.error(f'Error message - {inspect.currentframe().f_code.co_name}: {response.status}, {error_message}. URL: {url}')
+                    raise NotFoundError(f'Not Found Error. Error message {error_message}')
                 if response.status == 200:
                     if response_handler:
                         return await response_handler(response)
@@ -265,6 +272,11 @@ class ApiBase:
             if isinstance(result,RateLimitError):
                 self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
                 break
+            elif isinstance(result,APIkeyError):
+                self.logger.warning(f'API key is invalid or missing.')
+                break
+            elif isinstance(result,PermissionError):
+                break
             yield result
 
     async def _process_tasks(self,tasks : list,
@@ -316,7 +328,7 @@ class ApiBase:
                     saver(data_to_save)
                 all_results.extend(results_to_save)
                 results_to_save.clear()
-        self.logger.info(f'Geocoding job finished. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
+        self.logger.info(f'Job finished. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
         return all_results
 
     async def get_items_with_ids(self,
@@ -438,7 +450,7 @@ class ApiBase:
                     self.logger.error(f'Error fetching item {item} with - {e}')
                     return None
 
-        tasks = [fetch_item(item=item) for item_id,item in inputs]
+        tasks = [fetch_item(item=item) for item in inputs]
 
         all_results = await self._process_tasks(tasks=tasks, transformer=transformer, saver=saver,save_interval=save_interval)
         output = transformer(all_results)
