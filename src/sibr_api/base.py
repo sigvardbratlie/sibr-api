@@ -28,7 +28,7 @@ class APIkeyError(Exception):
         self.message = message
         super().__init__(self.message)
 
-class ApiBase(metaclass=abc.ABCMeta):
+class ApiBase:
     """
     A class to simplify async API requests.
     """
@@ -236,18 +236,18 @@ class ApiBase(metaclass=abc.ABCMeta):
     #     pass
 
 
-    @abc.abstractmethod
-    def save_func(self,results : list):
-        """
-        Abstract method to save the processed results.
-
-        This method should be implemented by subclasses to define how the
-        accumulated results from API calls are persisted (e.g., to a file,
-        database, or other storage).
-        Args:
-            results (list): A list of processed results to be saved.
-        """
-        pass
+    # @abc.abstractmethod
+    # def save_func(self,results : list):
+    #     """
+    #     Abstract method to save the processed results.
+    #
+    #     This method should be implemented by subclasses to define how the
+    #     accumulated results from API calls are persisted (e.g., to a file,
+    #     database, or other storage).
+    #     Args:
+    #         results (list): A list of processed results to be saved.
+    #     """
+    #     pass
 
     async def _process_batch(self,tasks : list):
         """
