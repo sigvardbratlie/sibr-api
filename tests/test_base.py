@@ -21,14 +21,15 @@ class MockApiClient(ApiBase):
         if output:
             id_str = output[0]
             data = output[1]
-            return {"id": id_str, "data": "transformed"}
+            return {"id": id_str, "data": data}
         return None
 
     def transform_output(self,outputs):
         return [self.transform_single(output) for output in outputs]
 
     def transform_output_lists(self,outputs):
-        return
+        df = pd.DataFrame(outputs)
+        return df
 
     def save_func(self, results):
         self.saved_results.extend(results)
@@ -129,9 +130,9 @@ async def test_fetch_single_other_error(client, aresponses):
 @pytest.mark.asyncio
 async def test_get_items_with_ids(client, aresponses):
     """Tester henting av flere elementer med ID-er."""
-    aresponses.add("mockapi.com", "/items/1", "GET", {"id": 1})
-    aresponses.add("mockapi.com", "/items/2", "GET", {"id": 2})
-    aresponses.add("mockapi.com", "/items/3", "GET", aresponses.Response(status=500))  # Ett kall feiler
+    aresponses.add("mockapi.com", "/items/1", "GET", {"answer": 1})
+    aresponses.add("mockapi.com", "/items/2", "GET", {"answer": 2})
+    aresponses.add("mockapi.com", "/items/3", "GET", aresponses.Response(status=500))
 
     inputs = {"item1": "1", "item2": "2", "item3": "3"}
     results = await client.get_items_with_ids(inputs = inputs,
@@ -140,8 +141,9 @@ async def test_get_items_with_ids(client, aresponses):
                                               saver = client.save_func,
                                                 concurrent_requests=2)
 
-    assert isinstance(results, list)
     assert isinstance(results[0], dict)
+    assert isinstance(results,list)
+    assert isinstance(results[0].get("id"),str)
     await client.close()
 
 
@@ -158,13 +160,13 @@ async def test_get_items(client, aresponses):
     tasks = [(item, item) for item in inputs]
     results = await client.get_items(inputs = tasks,
                                      fetcher = client.get_item,
-                                     transformer=client.transform_output,
+                                     transformer=client.transform_output_lists,
                                      saver = client.save_func,
                                      )
 
     assert len(results) == 2
-    assert {"id": "a"} in results
-    assert {"id": "b"} in results
+    assert isinstance(results,pd.DataFrame)
+    assert "id" in results.columns
     await client.close()
 
 

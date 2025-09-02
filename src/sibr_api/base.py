@@ -267,7 +267,9 @@ class ApiBase(metaclass=abc.ABCMeta):
                 break
             yield result
 
-    async def _process_tasks(self,tasks : list, transformer : Callable, saver : Callable, save_interval : int) -> list:
+    async def _process_tasks(self,tasks : list,
+                             transformer : Callable[[List],any],
+                             saver : Callable, save_interval : int) -> list:
         """
         A function to process a list of tasks.
 
@@ -320,7 +322,7 @@ class ApiBase(metaclass=abc.ABCMeta):
     async def get_items_with_ids(self,
                                inputs : list | dict,
                                fetcher : Callable,
-                               transformer : Callable,
+                               transformer : Callable[[List],any],
                                saver : Callable,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
@@ -390,7 +392,7 @@ class ApiBase(metaclass=abc.ABCMeta):
     async def get_items(self,
                                inputs : list | dict,
                                fetcher : Callable,
-                               transformer : Callable,
+                               transformer : Callable[[List],any],
                                saver : Callable,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
