@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from sibr_api.base import ApiBase, RateLimitError, APIkeyError
+from sibr_api.base import ApiBase, RateLimitError, APIkeyError, SkipItemException
 import asyncio
 from aiohttp import ClientError
 
@@ -122,8 +122,8 @@ async def test_fetch_single_permission_error(client, aresponses):
 async def test_fetch_single_other_error(client, aresponses):
     """Tester håndtering av andre HTTP-feil (f.eks. 500)."""
     aresponses.add("mockapi.com", "/items/1", "GET", aresponses.Response(status=500))
-    result = await client.get_item(1)
-    assert result is None
+    with pytest.raises(SkipItemException):
+        await client.get_item(1)
     await client.close()
 
 
@@ -157,8 +157,8 @@ async def test_get_items(client, aresponses):
     # get_items forventer en liste av tupler (item_id, item) i din implementering
     # Hvis den skal ta en ren liste, må du justere `tasks`-listen i get_items-metoden.
     # Gitt din nåværende kode, sender vi en liste med tupler:
-    tasks = [(item, item) for item in inputs]
-    results = await client.get_items(inputs = tasks,
+    #tasks = [(item, item) for item in inputs]
+    results = await client.get_items(inputs = inputs,
                                      fetcher = client.get_item,
                                      transformer=client.transform_output_lists,
                                      saver = client.save_func,
@@ -168,7 +168,6 @@ async def test_get_items(client, aresponses):
     assert isinstance(results,pd.DataFrame)
     assert "id" in results.columns
     await client.close()
-
 
 @pytest.mark.asyncio
 async def test_save_func_integration(client, aresponses):

@@ -32,6 +32,10 @@ class NotFoundError(Exception):
     def __init__(self, message="404 Not found error"):
         self.message = message
         super().__init__(self.message)
+class SkipItemException(Exception):
+    def __init__(self, message="Skipping item due to error"):
+        self.message = message
+        super().__init__(self.message)
 
 
 class ApiBase:
@@ -174,17 +178,20 @@ class ApiBase:
                 if response.status == 429:
                     error_message = await response.text()
                     raise RateLimitError(f'Rate limit exceeded. Error: {error_message}')
-                if response.status == 401:
+                elif response.status == 401:
                     error_message = await response.text()
                     raise APIkeyError(f'Authorization error. Error: {error_message}')
-                if response.status == 403:
+                elif response.status == 403:
                     error_message = await response.text()
                     raise PermissionError(f'Permission denied. Error: {error_message}')
-                if response.status == 404:
+                elif response.status == 404:
                     error_message = await response.text()
                     #self.logger.error(f'Error message - {inspect.currentframe().f_code.co_name}: {response.status}, {error_message}. URL: {url}')
                     raise NotFoundError(f'Not Found Error. Error message {error_message}')
-                if response.status == 200:
+                elif response.status == 500:
+                    error_message = await response.text()
+                    raise SkipItemException(f'Skip Item Exception. Error message {error_message}')
+                elif response.status == 200:
                     if response_handler:
                         return await response_handler(response)
                     elif return_format:
@@ -203,10 +210,10 @@ class ApiBase:
                     self.logger.error(
                         f'Error message - {inspect.currentframe().f_code.co_name}: {response.status}, {error_text}.')
                     response.raise_for_status()
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        except (aiohttp.ClientError, aiohttp.ClientResponseError,asyncio.TimeoutError,ConnectionError) as e:
             self.logger.error(f"Network failure or timeout - {e}. url {url}. Doing a short timeout of 2 seconds")
             await asyncio.sleep(2)
-            raise asyncio.TimeoutError()
+            raise SkipItemException
 
     # @abc.abstractmethod
     # def transform_single(self,item):
@@ -270,18 +277,15 @@ class ApiBase:
         """
 
         for future in asyncio.as_completed(tasks):
-            result = await future
-            if isinstance(result,RateLimitError):
-                self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
+            try:
+                result = await future
+                yield result
+            except (RateLimitError,APIkeyError,PermissionError) as fatal_errors:
+                self.logger.warning(f'fatal error. Stopping code: {fatal_errors}')
                 break
-            elif isinstance(result,APIkeyError):
-                self.logger.warning(f'API key is invalid or missing.')
-                break
-            elif isinstance(result,PermissionError):
-                break
-            elif isinstance(result,asyncio.TimeoutError):
+            except SkipItemException as timeout_errors:
+                self.logger.warning(f'Skipping item due to timeout or server error. {timeout_errors}')
                 continue
-            yield result
 
     async def _process_tasks(self,tasks : list,
                              transformer : Callable[[List],any],
@@ -307,8 +311,8 @@ class ApiBase:
             async for result in processed_results:
                 count += 1
                 if result is None:
-                    self.logger.warning(f'Results is None')
-                    continue
+                    self.logger.warning(f'Results is from `fetcher`is None. Ignore and continue')
+                #     continue
 
                 results_to_save.append(result)
                 if count % 500 == 0:
@@ -323,8 +327,6 @@ class ApiBase:
                     all_results.extend(results_to_save)
                     results_to_save.clear()
 
-        except RateLimitError:
-            self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
         finally:
             if results_to_save:
                 if saver:
@@ -332,6 +334,7 @@ class ApiBase:
                     saver(data_to_save)
                 all_results.extend(results_to_save)
                 results_to_save.clear()
+
         self.logger.info(f'Job finished. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
         return all_results
 
@@ -392,11 +395,17 @@ class ApiBase:
                 try:
                     result  = await fetcher(item)
                     return (item_id, result)
-                except RateLimitError:
-                    self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
+                except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
+                    self.logger.error(f'fatal error. Stopping code: {fatal_errors}')
+                    raise
+                # except (asyncio.TimeoutError, ConnectionError,aiohttp.ClientError,SkipItemException) as timeout_errors:
+                #     self.logger.warning(f'Timeout errors with {item_id},{item} - {timeout_errors}')
+                #     raise
+                except SkipItemException as timeout_errors:
+                    self.logger.warning(f'Timeout errors with {item_id},{item} - {timeout_errors}')
                     raise
                 except Exception as e:
-                    self.logger.error(f'Error fetching item {item} with item_id {item_id} - {e}')
+                    self.logger.error(f'General Error fetching item {item} with item_id {item_id} - {e}. Returning {(item_id, None)}')
                     return (item_id, None)
 
         tasks = [fetch_item_with_id(item_id=item_id, item=item) for item_id,item in inputs.items()]
@@ -447,8 +456,14 @@ class ApiBase:
                 try:
                     result  = await fetcher(item)
                     return result
-                except RateLimitError:
-                    self.logger.warning(f'Rate limit exceeded. Stopping code. Please try again later.')
+                except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
+                    self.logger.warning(f'fatal error. Stopping code: {fatal_errors}')
+                    raise
+                # except (asyncio.TimeoutError, ConnectionError, aiohttp.ClientError) as timeout_errors:
+                #     self.logger.warning(f'Timeout errors with {item} - {timeout_errors}')
+                #     raise
+                except SkipItemException as timeout_errors:
+                    self.logger.warning(f'Timeout errors with {item} - {timeout_errors}')
                     raise
                 except Exception as e:
                     self.logger.error(f'Error fetching item {item} with - {e}')
