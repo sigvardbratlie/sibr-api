@@ -310,8 +310,8 @@ class ApiBase:
         try:
             async for result in processed_results:
                 count += 1
-                if result is None:
-                    self.logger.warning(f'Results is from `fetcher`is None. Ignore and continue')
+                # if result is None:
+                #     self.logger.warning(f'Results from `fetcher`is None. Ignore and continue')
                 #     continue
 
                 results_to_save.append(result)
