@@ -322,16 +322,23 @@ class ApiBase:
                     self.logger.info(f'Processed {count} so far. Save interval of {save_interval} reached.')
                     if saver:
                         self.logger.info(f'Saving {len(results_to_save)} results')
-                        data_to_save = transformer(results_to_save)
-                        saver(data_to_save)
+                        data_to_save = await asyncio.to_thread(transformer,results_to_save)
+                        await asyncio.to_thread(saver,data_to_save)
                     all_results.extend(results_to_save)
                     results_to_save.clear()
+        except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
+            self.logger.error(f'Fatal error in `_process_tasks`, stopping process: {fatal_errors}')
+            raise
+        except SkipItemException as item_error:
+            self.logger.warning(f'Skipping item due to a recoverable error: {item_error}')
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred in task processing loop: {e}")
 
         finally:
             if results_to_save:
                 if saver:
-                    data_to_save = transformer(results_to_save)
-                    saver(data_to_save)
+                    data_to_save = await asyncio.to_thread(transformer, results_to_save)
+                    await asyncio.to_thread(saver, data_to_save)
                 all_results.extend(results_to_save)
                 results_to_save.clear()
 
