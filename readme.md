@@ -29,10 +29,6 @@ To get startet, run the pip install command:
 pip install sibr-api
 ```
 
-
-It is recommended to list these in a requirements.txt file for your project.
-
-
 ## How to use
 
 To use this module, you must create a new class that inherits from ApiBase and implement the necessary methods for your specific API integration.
