@@ -26,7 +26,7 @@ The framework is built on aiohttp for asynchronous HTTP requests and is structur
 To get startet, run the pip install command:
 
 ```bash
-pip install sibr-module
+pip install sibr-api
 ```
 
 
