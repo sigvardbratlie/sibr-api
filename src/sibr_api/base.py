@@ -349,7 +349,7 @@ class ApiBase:
                                inputs : list | dict,
                                fetcher : Callable,
                                transformer : Callable[[List],any],
-                               saver : Callable,
+                               saver : Callable = None,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
                                ) -> list:
@@ -364,8 +364,8 @@ class ApiBase:
             inputs (list | dict): A list of items or a dictionary where keys are item IDs
                                    and values are the items to be fetched.
             fetcher (callable): An asynchronous function that takes a single item as input and fetches its data.
-            transformer (callable): A function to transform the results.
-            saver (callable): A function to save the results.
+            transformer (callable): A function to transform the results. NB: Must take a list as input!
+            saver (callable): A function to save the results. Optional, if not provided, data will not be saved.
             save_interval (int): The number of results to accumulate before saving (if `save` is True).
             concurrent_requests (int): The maximum number of concurrent API requests.
 
@@ -425,7 +425,7 @@ class ApiBase:
                                inputs : list | dict,
                                fetcher : Callable,
                                transformer : Callable[[List],any],
-                               saver : Callable,
+                               saver : Callable = None,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
                                ) -> list:
@@ -438,8 +438,8 @@ class ApiBase:
         Args:
             inputs (list): A list of items to be fetched.
             fetcher (callable): An asynchronous function that takes a single item as input and fetches its data.
-            transformer (callable): A function to transform the results.
-            saver (callable): A function to save the results.
+            transformer (callable): A function to transform the results. NB: Must take a list as input!
+            saver (callable): A function to save the results. Optional, if not provided, data will not be saved.
             save_interval (int): The number of results to accumulate before saving (if `save` is True).
             concurrent_requests (int): The maximum number of concurrent API requests.
 
