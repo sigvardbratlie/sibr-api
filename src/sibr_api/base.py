@@ -352,6 +352,7 @@ class ApiBase:
                                saver : Callable = None,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
+                               return_result : bool = False,
                                ) -> list:
         """
         Fetches multiple items concurrently, associating each result with a unique ID.
@@ -418,8 +419,9 @@ class ApiBase:
         tasks = [fetch_item_with_id(item_id=item_id, item=item) for item_id,item in inputs.items()]
 
         all_results = await self._process_tasks(tasks = tasks, transformer = transformer, saver = saver, save_interval=save_interval)
-        output = transformer(all_results)
-        return output
+        if return_result:
+            output = transformer(all_results)
+            return output
 
     async def get_items(self,
                                inputs : list | dict,
@@ -428,6 +430,7 @@ class ApiBase:
                                saver : Callable = None,
                                save_interval: int = 50000,
                                concurrent_requests : int = 5,
+                               return_result: bool = False,
                                ) -> list:
         """
         Fetches multiple items concurrently.
@@ -479,5 +482,6 @@ class ApiBase:
         tasks = [fetch_item(item=item) for item in inputs]
 
         all_results = await self._process_tasks(tasks=tasks, transformer=transformer, saver=saver,save_interval=save_interval)
-        output = transformer(all_results)
-        return output
+        if return_result:
+            output = transformer(all_results)
+            return output
