@@ -191,6 +191,12 @@ class ApiBase:
                 elif response.status == 500:
                     error_message = await response.text()
                     raise SkipItemException(f'Skip Item Exception. Error message {error_message}')
+                elif response.status == 204:
+                    error_message = await response.text()
+                    raise NotFoundError(f'Not Found Error. Error code 204 - {error_message}')
+                elif response.status == 400:
+                    error_message = await response.text()
+                    raise NotFoundError(f'Not Found Error. Error code 400 - {error_message}')
                 elif response.status == 200:
                     if response_handler:
                         return await response_handler(response)
@@ -281,7 +287,7 @@ class ApiBase:
                 result = await future
                 yield result
             except (RateLimitError,APIkeyError,PermissionError) as fatal_errors:
-                self.logger.warning(f'fatal error. Stopping code: {fatal_errors}')
+                #self.logger.warning(f'fatal error. Stopping code: {fatal_errors}')
                 break
             except SkipItemException as timeout_errors:
                 self.logger.warning(f'Skipping item due to timeout or server error. {timeout_errors}')
@@ -404,7 +410,7 @@ class ApiBase:
                     result  = await fetcher(item)
                     return (item_id, result)
                 except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
-                    self.logger.error(f'fatal error. Stopping code: {fatal_errors}')
+                    self.logger.error(f'fatal error for {item_id,item}.  Stopping code: {fatal_errors}')
                     raise
                 # except (asyncio.TimeoutError, ConnectionError,aiohttp.ClientError,SkipItemException) as timeout_errors:
                 #     self.logger.warning(f'Timeout errors with {item_id},{item} - {timeout_errors}')
@@ -467,7 +473,7 @@ class ApiBase:
                     result  = await fetcher(item)
                     return result
                 except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
-                    self.logger.warning(f'fatal error. Stopping code: {fatal_errors}')
+                    self.logger.warning(f'fatal error for {item}. Stopping code: {fatal_errors}')
                     raise
                 # except (asyncio.TimeoutError, ConnectionError, aiohttp.ClientError) as timeout_errors:
                 #     self.logger.warning(f'Timeout errors with {item} - {timeout_errors}')
