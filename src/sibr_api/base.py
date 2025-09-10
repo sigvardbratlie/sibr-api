@@ -310,41 +310,50 @@ class ApiBase:
 
         all_results = []
         results_to_save = []
-
-        processed_results = self._process_batch(tasks)
+        task_futures = asyncio.as_completed(tasks)
+        #processed_results = self._process_batch(tasks)
         count = 0
         try:
-            async for result in processed_results:
-                count += 1
-                # if result is None:
-                #     self.logger.warning(f'Results from `fetcher`is None. Ignore and continue')
-                #     continue
+            #async for result in processed_results:
+            for future in task_futures:
+                try:
+                    result = await future
+                    count += 1
 
-                results_to_save.append(result)
-                if count % 500 == 0:
-                    self.logger.info(f'Processed {count} so far. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
+                    results_to_save.append(result)
+                    if count % 500 == 0:
+                        self.logger.info(f'Processed {count} so far. Successful requests: {self.ok_responses} | failed requests {self.fail_responses}')
 
-                if len(results_to_save) >= save_interval:
-                    self.logger.info(f'Processed {count} so far. Save interval of {save_interval} reached.')
-                    if saver:
-                        self.logger.info(f'Saving {len(results_to_save)} results')
-                        data_to_save = await asyncio.to_thread(transformer,results_to_save)
-                        await asyncio.to_thread(saver,data_to_save)
-                    all_results.extend(results_to_save)
-                    results_to_save.clear()
-        except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
-            self.logger.error(f'Fatal error in `_process_tasks`, stopping process: {fatal_errors}')
-            raise
-        except SkipItemException as item_error:
-            self.logger.warning(f'Skipping item due to a recoverable error: {item_error}')
-        except Exception as e:
-            self.logger.error(f"An unexpected error occurred in task processing loop: {e}")
+                    if len(results_to_save) >= save_interval:
+                        self.logger.info(f'Processed {count} so far. Save interval of {save_interval} reached.')
+                        if saver:
+                            self.logger.info(f'Saving {len(results_to_save)} results')
+                            data_to_save = await asyncio.to_thread(transformer,results_to_save)
+                            await asyncio.to_thread(saver,data_to_save)
+                        all_results.extend(results_to_save)
+                        results_to_save.clear()
+                except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
+                    self.logger.error(f'Fatal error in `_process_tasks`, stopping process: {fatal_errors}')
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*tasks,return_exceptions=True)
+                    raise
+                except SkipItemException as item_error:
+                    self.logger.warning(f'Skipping item due to a recoverable error: {item_error}')
+                    continue
+                except Exception as e:
+                    self.logger.error(f"An unexpected error occurred in task processing loop: {e}")
+                    continue
 
         finally:
             if results_to_save:
                 if saver:
-                    data_to_save = await asyncio.to_thread(transformer, results_to_save)
-                    await asyncio.to_thread(saver, data_to_save)
+                    try:
+                        data_to_save = await asyncio.to_thread(transformer, results_to_save)
+                        await asyncio.to_thread(saver, data_to_save)
+                    except Exception as e:
+                        self.logger.error(f"An error occurred while saving results: {e}")
                 all_results.extend(results_to_save)
                 results_to_save.clear()
 
