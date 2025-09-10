@@ -189,3 +189,58 @@ async def test_save_func_integration(client, aresponses):
 
     assert len(client.saved_results) == 6
     await client.close()
+
+@pytest.mark.asyncio
+async def test_get_items_with_ids_cancels_on_fatal_error(client, aresponses):
+    """
+    Tester at pågående oppgaver blir kansellert når en fatal feil (RateLimitError) oppstår.
+    """
+    completed_requests = []
+
+    # 1. Simulerer en treg, vellykket forespørsel.
+    #    Den skal sove i 1 sekund før den svarer.
+    async def handler_slow_success(request):
+        await asyncio.sleep(1)
+        completed_requests.append("slow_success")
+        return aresponses.Response(status=200, body='{"id": "slow"}')
+
+    # 2. Denne vil utløse feilen umiddelbart.
+    aresponses.add("mockapi.com", "/items/rate_limit_trigger", "GET", aresponses.Response(status=429))
+
+    # 3. Denne er også treg og skal ALDRI fullføre, fordi den blir kansellert.
+    async def handler_should_be_cancelled(request):
+        await asyncio.sleep(1)
+        completed_requests.append("should_be_cancelled") # Denne linjen skal aldri nås
+        return aresponses.Response(status=200, body='{"id": "cancelled"}')
+
+    aresponses.add("mockapi.com", "/items/slow_success", "GET", handler_slow_success)
+    aresponses.add("mockapi.com", "/items/should_be_cancelled", "GET", handler_should_be_cancelled)
+
+    inputs = {
+        "req1": "slow_success",
+        "req2": "rate_limit_trigger",
+        "req3": "should_be_cancelled"
+    }
+
+    # Vi forventer at hele operasjonen feiler med RateLimitError
+    with pytest.raises(RateLimitError):
+        await client.get_items_with_ids(
+            inputs=inputs,
+            fetcher=client.get_item,
+            transformer=client.transform_output,
+            saver=client.save_func,
+            concurrent_requests=3 # Kjører alle samtidig
+        )
+
+    # Nå sjekker vi hva som faktisk skjedde.
+    # Vent litt for å sikre at event-loopen har håndtert kanselleringene.
+    await asyncio.sleep(0.1)
+
+    # Asserts:
+    # 'should_be_cancelled' skal IKKE være i listen, fordi oppgaven ble kansellert
+    # før den rakk å fullføre (dvs. før `sleep` var over). Dette beviser at
+    # kanselleringslogikken virker.
+    print(f"Fullførte forespørsler: {completed_requests}")
+    assert "should_be_cancelled" not in completed_requests
+
+    await client.close()

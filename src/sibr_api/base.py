@@ -431,7 +431,7 @@ class ApiBase:
                     self.logger.error(f'General Error fetching item {item} with item_id {item_id} - {e}. Returning {(item_id, None)}')
                     return (item_id, None)
 
-        tasks = [fetch_item_with_id(item_id=item_id, item=item) for item_id,item in inputs.items()]
+        tasks = [asyncio.create_task(fetch_item_with_id(item_id=item_id, item=item)) for item_id,item in inputs.items()]
 
         all_results = await self._process_tasks(tasks = tasks, transformer = transformer, saver = saver, save_interval=save_interval)
         if return_result:
@@ -494,7 +494,7 @@ class ApiBase:
                     self.logger.error(f'Error fetching item {item} with - {e}')
                     return None
 
-        tasks = [fetch_item(item=item) for item in inputs]
+        tasks = [asyncio.create_task(fetch_item(item=item)) for item in inputs]
 
         all_results = await self._process_tasks(tasks=tasks, transformer=transformer, saver=saver,save_interval=save_interval)
         if return_result:
