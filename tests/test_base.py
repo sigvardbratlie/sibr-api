@@ -139,7 +139,8 @@ async def test_get_items_with_ids(client, aresponses):
                                               fetcher = client.get_item,
                                               transformer = client.transform_output,
                                               saver = client.save_func,
-                                                concurrent_requests=2)
+                                                concurrent_requests=2,
+                                              return_result=True)
 
     assert isinstance(results[0], dict)
     assert isinstance(results,list)
@@ -162,7 +163,8 @@ async def test_get_items(client, aresponses):
                                      fetcher = client.get_item,
                                      transformer=client.transform_output_lists,
                                      saver = client.save_func,
-                                     )
+                                     return_result=True)
+
 
     assert len(results) == 2
     assert isinstance(results,pd.DataFrame)
@@ -182,7 +184,8 @@ async def test_save_func_integration(client, aresponses):
                                     fetcher = client.get_item,
                                     transformer = client.transform_output,
                                     saver = client.save_func,
-                                    save_interval=3)
+                                    save_interval=3,
+                                    return_result=True)
 
     assert len(client.saved_results) == 6
     await client.close()
