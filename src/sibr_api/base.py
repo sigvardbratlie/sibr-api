@@ -1,18 +1,20 @@
-import os
+import collections
 import logging
-import time
-from http.client import responses
 import aiohttp
 import asyncio
 import inspect
 import pandas as pd
-from urllib.parse import quote_plus
 from typing import Literal,List,Tuple
-import json
-import abc
 from typing import Callable
 from dotenv import load_dotenv
+from asyncio import Lock
+import time
+# import os
 #os.chdir("..")
+# from http.client import responses
+# from urllib.parse import quote_plus
+# import json
+# import abc
 load_dotenv()
 
 
@@ -42,13 +44,19 @@ class ApiBase:
     """
     A class to simplify async API requests.
     """
-    def __init__(self,logger_name = 'ApiBase',logger = None, proxies : dict = None):
+    def __init__(self,logger_name = 'ApiBase',
+                 logger = None,
+                 proxies : dict = None,
+                 rate_limit_count : int = None,
+                 rate_limit_period : int = None):
         """
 
         Args:
             logger_name (str): A name for the logger. Default 'ApiBase' if no name is given.
             logger (logging): A logger object. If left open, a default logger will be assigned.
             proxies (dict): A dictionary with proxies. Defaults to None. Example: proxies = {'http' : proxy_url_http, 'https' : proxy_url_https}
+            rate_limit_count (int): Max number of requests for a given time period
+            rate_limit_period (int): The time period in seconds for the rate limit
 
         """
         if logger is None:
@@ -61,6 +69,10 @@ class ApiBase:
         self.base_url = None
         self.ok_responses = 0
         self.fail_responses = 0
+        self.rate_limit_count = rate_limit_count
+        self.rate_limit_period = rate_limit_period
+        self.request_timestamps = collections.deque()
+        self._rate_limit_lock = Lock()
 
 
     def _ensure_fieldnames(self, df : pd.DataFrame) -> None:
@@ -107,6 +119,30 @@ class ApiBase:
         '''
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession()
+
+    async def _wait_for_rate_limit(self):
+        """Sjekker og venter om rate limit er nådd, basert på et glidende vindu."""
+        if not self.rate_limit_count:
+            return
+
+        async with self._rate_limit_lock:
+            now = time.monotonic()
+
+            while self.request_timestamps:
+                if self.request_timestamps[0] < now - self.rate_limit_period:
+                    self.request_timestamps.popleft()
+                else:
+                    break
+
+            if len(self.request_timestamps) >= self.rate_limit_count:
+                oldest_timestamp = self.request_timestamps[0]
+                wait_time = oldest_timestamp - (now - self.rate_limit_period)
+
+                if wait_time > 0:
+                    self.logger.info(f"Rate limit nådd. Venter i {wait_time:.2f} sekunder.")
+                    await asyncio.sleep(wait_time)
+
+            self.request_timestamps.append(time.monotonic())
 
     async def close(self) -> None:
         '''
@@ -414,6 +450,7 @@ class ApiBase:
             Returns (tuple): (item_id, result)
 
             """
+            await self._wait_for_rate_limit()
             async with semaphore:
                 try:
                     result  = await fetcher(item)
@@ -477,6 +514,7 @@ class ApiBase:
         semaphore = asyncio.Semaphore(concurrent_requests)
 
         async def fetch_item(item):
+            await self._wait_for_rate_limit()
             async with semaphore:
                 try:
                     result  = await fetcher(item)

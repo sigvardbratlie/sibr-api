@@ -3,6 +3,8 @@ import pandas as pd
 from sibr_api.base import ApiBase, RateLimitError, APIkeyError, SkipItemException
 import asyncio
 from aiohttp import ClientError
+import time
+
 
 
 # En konkret implementering av ApiBase for testing
@@ -236,11 +238,42 @@ async def test_get_items_with_ids_cancels_on_fatal_error(client, aresponses):
     # Vent litt for å sikre at event-loopen har håndtert kanselleringene.
     await asyncio.sleep(0.1)
 
-    # Asserts:
-    # 'should_be_cancelled' skal IKKE være i listen, fordi oppgaven ble kansellert
-    # før den rakk å fullføre (dvs. før `sleep` var over). Dette beviser at
-    # kanselleringslogikken virker.
     print(f"Fullførte forespørsler: {completed_requests}")
     assert "should_be_cancelled" not in completed_requests
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_pauses_execution(aresponses):
+    """
+    Verifies if ratelimit works
+    """
+    client = MockApiClient(rate_limit_count=3, rate_limit_period=0.5)
+
+    num_requests = 4
+    inputs = [str(i) for i in range(1, num_requests + 1)]
+
+    for i in inputs:
+        aresponses.add("mockapi.com", f"/items/{i}", "GET", {"id": i})
+
+    start_time = time.monotonic()
+
+    results = await client.get_items(
+        inputs=inputs,
+        fetcher=client.get_item,
+        transformer=client.transform_output_lists,
+        concurrent_requests=num_requests,
+        return_result=True
+    )
+
+    end_time = time.monotonic()
+    duration = end_time - start_time
+
+    print(f"Total tid for {num_requests} forespørsler: {duration:.4f} sekunder.")
+    assert duration > client.rate_limit_period
+
+    # Sjekk også at vi faktisk fikk alle resultatene til slutt
+    assert len(results) == num_requests
 
     await client.close()
