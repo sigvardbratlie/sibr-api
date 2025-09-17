@@ -257,78 +257,6 @@ class ApiBase:
             await asyncio.sleep(2)
             raise SkipItemException
 
-    # @abc.abstractmethod
-    # def transform_single(self,item):
-    #     """
-    #     Abstract method to transform a single raw API response into a desired format.
-    #
-    #     This method should be implemented by subclasses to parse and
-    #     restructure the data received from a single API call.
-    #
-    #     Args:
-    #         item: The raw response from a single API call. The type and structure
-    #                will depend on the specific API.
-    #     Returns:
-    #         Any: The transformed data in the desired format.
-    #
-    #     """
-    #     pass
-    #
-    # @abc.abstractmethod
-    # def transform_data(self, items):
-    #     """
-    #     Abstract method to transform a list of raw API responses into a desired format.
-    #
-    #     This method should be implemented by subclasses to parse and
-    #     restructure a list of data received from API calls.
-    #
-    #     This method should implement the transform_single method.
-    #
-    #     Args:
-    #         items (list): A list of raw responses from API calls.
-    #     Returns:
-    #         Any: The transformed data, typically a pandas DataFrame or a list of transformed items.
-    #
-    #     """
-    #
-    #     pass
-
-
-    # @abc.abstractmethod
-    # def save_func(self,results : list):
-    #     """
-    #     Abstract method to save the processed results.
-    #
-    #     This method should be implemented by subclasses to define how the
-    #     accumulated results from API calls are persisted (e.g., to a file,
-    #     database, or other storage).
-    #     Args:
-    #         results (list): A list of processed results to be saved.
-    #     """
-    #     pass
-
-    async def _process_batch(self,tasks : list):
-        """
-        A function to process a batch of tasks.
-
-        Args:
-            tasks (list): The list of tasks to be processed
-
-        Yields:
-            result: The result of the task
-        """
-
-        for future in asyncio.as_completed(tasks):
-            try:
-                result = await future
-                yield result
-            except (RateLimitError,APIkeyError,PermissionError) as fatal_errors:
-                #self.logger.warning(f'fatal error. Stopping code: {fatal_errors}')
-                break
-            except SkipItemException as timeout_errors:
-                self.logger.warning(f'Skipping item due to timeout or server error. {timeout_errors}')
-                continue
-
     async def _process_tasks(self,tasks : list,
                              transformer : Callable[[List],any],
                              saver : Callable, save_interval : int) -> list:
@@ -347,10 +275,8 @@ class ApiBase:
         all_results = []
         results_to_save = []
         task_futures = asyncio.as_completed(tasks)
-        #processed_results = self._process_batch(tasks)
         count = 0
         try:
-            #async for result in processed_results:
             for future in task_futures:
                 try:
                     result = await future
