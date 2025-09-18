@@ -289,9 +289,13 @@ class ApiBase:
                     if len(results_to_save) >= save_interval:
                         self.logger.info(f'Processed {count} so far. Save interval of {save_interval} reached.')
                         if saver:
-                            self.logger.info(f'Saving {len(results_to_save)} results')
-                            data_to_save = await asyncio.to_thread(transformer,results_to_save)
-                            await asyncio.to_thread(saver,data_to_save)
+                            try:
+                                self.logger.info(f'Saving {len(results_to_save)} results')
+                                data_to_save = await asyncio.to_thread(transformer,results_to_save)
+                                await asyncio.to_thread(saver,data_to_save)
+                            except Exception as e:
+                                self.logger.error(f"NB: SAVING ERROR: {e}")
+                                raise
                         all_results.extend(results_to_save)
                         results_to_save.clear()
                 except (RateLimitError, APIkeyError, PermissionError) as fatal_errors:
